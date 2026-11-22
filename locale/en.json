@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Wake guard",
+    "description": "Holds a power request for a grace period after waking from sleep, so the machine does not fall straight back into standby and remote clients can reconnect.",
+    "detail": "docs/DETAIL.md"
+  }
+}

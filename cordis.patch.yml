@@ -1,0 +1,8 @@
+# Windows-only helper. `dsh.bundle.platforms` in package.json makes DSH refuse
+# the bundle on other Host operating systems instead of loading a dead panel.
+- insert:
+    - id: wake-guard
+      name: '@rzcdz/dsh-wake-guard'
+      config:
+        graceMinutes: 10
+        suspendDelaySec: 10

@@ -1,0 +1,58 @@
+{
+  "name": "@rzcdz/dsh-wake-guard",
+  "version": "2.0.0",
+  "description": "Sidebar switch that keeps the machine awake for a grace period after waking from sleep, so remote clients can reconnect.",
+  "license": "MIT",
+  "author": "rzcdz",
+  "type": "module",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "windows",
+    "modern-standby",
+    "wake"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rzcdz/dsh-wake-guard.git"
+  },
+  "homepage": "https://github.com/rzcdz/dsh-wake-guard#readme",
+  "bugs": {
+    "url": "https://github.com/rzcdz/dsh-wake-guard/issues"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "scripts/WakeGuard.ps1",
+    "scripts/Suspend-Standby.ps1",
+    "locale/*.json",
+    "docs",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml",
+      "platforms": [
+        "win32"
+      ]
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  }
+}
