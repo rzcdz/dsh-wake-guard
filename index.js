@@ -183,8 +183,8 @@ export function apply(ctx, config = {}) {
   //
   // The Host runs inside the Electron main process, so the app can relaunch
   // itself the way DSH's own updater does. A Host that cannot reach Electron
-  // falls back to a detached PowerShell helper, which must outlive the process
-  // it replaces — hence `detached` plus `unref`.
+  // falls back to a PowerShell helper that must outlive the process it
+  // replaces, so it is created by the WMI service rather than as our child.
   // ---------------------------------------------------------------------
 
   /** How long the HTTP reply is given to flush before the process goes away. */
