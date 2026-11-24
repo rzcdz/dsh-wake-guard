@@ -4,8 +4,21 @@ A [DeepSeek Harness](https://github.com/deepseek-ai) (DSH) plugin bundle for
 Windows laptops on Modern Standby: after the machine wakes from sleep, it keeps
 the system awake for a grace period so a remote client has time to reconnect.
 
-The bundle adds a sidebar entry with a switch, a status panel, and two small
-PowerShell helpers. Nothing runs until you turn the switch on.
+The bundle adds a sidebar entry with a switch, a status panel, a **Restart DSH**
+button, and three small PowerShell helpers. Nothing runs until you turn the
+switch on.
+
+## Restart DSH
+
+The panel has a two-click restart button: the first click arms it, the second
+restarts. A restart **ends every running session**, so save first; the page
+reloads itself once the Host answers again.
+
+It prefers Electron's own `app.relaunch()` — the same path DSH's updater uses —
+and falls back to a detached PowerShell helper that stops every DSH process,
+waits until they are really gone, then starts the executable again. That wait
+matters: Electron's single-instance lock makes a new process hand off to the
+running one and exit, so starting too early would leave nothing running.
 
 ## The problem
 

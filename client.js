@@ -96,6 +96,25 @@ window.__ModuleLoader__.load({
         color: var(--dsw-alias-text-secondary, #55606e);
       }
       .wg-err { max-width: 620px; margin-top: 12px; font-size: 12.5px; color: #d84a3a; }
+      .wg-restart {
+        max-width: 620px; margin-top: 18px; padding: 14px 16px;
+        border-radius: 12px; display: flex; align-items: center; gap: 14px;
+        background: var(--dsw-alias-bg-subtle, #f7f8fa);
+        border: 1px solid var(--dsw-alias-border-default, #e6e9ee);
+      }
+      .wg-restarttext { flex: 1; min-width: 0; }
+      .wg-btn {
+        padding: 7px 15px; border-radius: 8px; cursor: pointer; font: inherit;
+        white-space: nowrap; border: 1px solid var(--dsw-alias-border-default, #dfe3e9);
+        background: var(--dsw-alias-bg-base, #fff);
+        color: var(--dsw-alias-text-primary, #1f2328);
+      }
+      .wg-btn:hover:not(:disabled) { background: var(--dsw-alias-bg-subtle, #f1f3f6); }
+      .wg-btn:disabled { opacity: .55; cursor: progress; }
+      .wg-btn.danger {
+        background: #d84a3a; border-color: #d84a3a; color: #fff;
+      }
+      .wg-btn.danger:hover:not(:disabled) { filter: brightness(.94); }
     `;
 
     function Styles() {
@@ -162,6 +181,68 @@ window.__ModuleLoader__.load({
       const delay = (state && state.suspendDelaySec) || 10;
       const grace = (state && state.graceMinutes) || 10;
 
+      // Restart runs in two clicks: the first arms the button, the second
+      // actually restarts, so a stray click cannot kill a running session.
+      const [armed, setArmed] = React.useState(false);
+      const [restarting, setRestarting] = React.useState(false);
+      const [restartNote, setRestartNote] = React.useState('');
+      const [capability, setCapability] = React.useState(null);
+
+      React.useEffect(() => {
+        let alive = true;
+        call('restart')
+          .then((value) => { if (alive) setCapability(value); })
+          .catch(() => {});
+        return () => { alive = false; };
+      }, []);
+
+      const doRestart = async () => {
+        if (restarting) return;
+        if (!armed) {
+          setArmed(true);
+          setRestartNote('再点一次确认重启。正在运行的会话会中断。');
+          return;
+        }
+        setArmed(false);
+        setRestarting(true);
+        setRestartNote('正在重启，页面会在服务恢复后自动刷新。');
+        try {
+          await call('restart', 'POST');
+        } catch (e) {
+          setRestartNote(String((e && e.message) || e));
+          setRestarting(false);
+          return;
+        }
+        // The host is going away; wait for it to answer again.
+        const deadline = Date.now() + 90000;
+        const poll = async () => {
+          if (Date.now() > deadline) {
+            setRestartNote('没有等到 DSH 恢复，请手动重新打开。');
+            setRestarting(false);
+            return;
+          }
+          try {
+            const probe = await fetch(`${API}/state`, { method: 'GET', cache: 'no-store' });
+            if (probe.ok) {
+              window.location.reload();
+              return;
+            }
+          } catch {
+            // Still down.
+          }
+          setTimeout(poll, 1500);
+        };
+        setTimeout(poll, 2500);
+      };
+
+      const restartHint = capability === null
+        ? '检测中…'
+        : capability.method === 'electron'
+          ? '通过 Electron 重启当前应用。'
+          : capability.method === 'helper'
+            ? '通过独立助手进程结束并重新启动 DSH。'
+            : '当前环境无法自动重启，请手动退出后重新打开。';
+
       return h('div', { className: 'wg-page' },
         h(Styles),
         h('div', { className: 'wg-head' },
@@ -214,6 +295,22 @@ window.__ModuleLoader__.load({
         ),
 
         error ? h('div', { className: 'wg-err' }, error) : null,
+
+        h('div', { className: 'wg-restart' },
+          h('div', { className: 'wg-restarttext' },
+            h('div', { className: 'wg-label' }, '重启'),
+            h('div', { className: 'wg-hint' }, restartHint),
+            restartNote !== ''
+              ? h('div', { className: 'wg-hint', style: { color: '#d84a3a' } }, restartNote)
+              : null,
+          ),
+          h('button', {
+            className: armed ? 'wg-btn danger' : 'wg-btn',
+            disabled: restarting || (capability !== null && capability.available !== true),
+            onClick: doRestart,
+            onBlur: () => setArmed(false),
+          }, restarting ? '重启中…' : armed ? '确认' : '重启'),
+        ),
 
         state && state.logTail
           ? h('div', { className: 'wg-log' }, state.logTail)
