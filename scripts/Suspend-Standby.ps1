@@ -56,9 +56,6 @@ public class WgPower {
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
-    [DllImport("powrprof.dll", SetLastError = true)]
-    public static extern bool SetSuspendState(bool hibernate, bool forceCritical, bool disableWakeEvent);
-
     public const uint INPUT_KEYBOARD  = 1;
     public const ushort VK_SLEEP      = 0x5F;
     public const int WM_SYSCOMMAND    = 0x0112;
