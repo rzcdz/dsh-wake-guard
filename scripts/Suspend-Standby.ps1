@@ -5,27 +5,29 @@
 # Why not SetSuspendState:
 #   On systems that support Modern Standby, SetSuspendState() no longer puts the
 #   machine into S0ix. Depending on configuration it either fails with
-#   ERROR_NOT_SUPPORTED or, as observed on this machine, falls through to S4
-#   hibernation: the session is written to hiberfil.sys, power is cut, and the
-#   next press of the power button brings up the firmware logo. That path cannot
-#   be woken by an AC power change, so it defeats the purpose here.
+#   ERROR_NOT_SUPPORTED or falls through to S4 hibernation: the session is
+#   written to hiberfil.sys, power is cut, and the next press of the power
+#   button brings up the firmware logo. That path cannot be woken by a key press,
+#   so it defeats the purpose here.
 #
-#   This is documented in the Windows driver community: user-mode code can no
-#   longer suspend a Modern Standby machine through SetSuspendState; the
-#   workable route is to turn the display off, which the power manager treats as
-#   loss of user presence and then transitions to S0ix a few seconds later.
+#   Measured on this machine: this system has no S1/S2/S3 (`powercfg /a`), and the
+#   Event Log shows sleeps with `Sleep Reason: Application API` landing on event
+#   42 (`entering sleep` = S4), while idle-driven Modern Standby shows event 506
+#   (`entering Modern Standby`, `Reason: Idle Timeout`). Only the 506 path is
+#   wakeable by an ordinary key press.
 #
-# Two steps, in order:
-#   1. Try the virtual sleep key (VK_SLEEP). The power manager treats this as the
-#      sleep button, which enters Modern Standby directly when honoured.
-#   2. Turn the display off via SC_MONITORPOWER. This is the documented fallback
-#      and works from an interactive session.
+# The workable route is to turn the display off: the power manager treats that as
+# loss of user presence and transitions to S0ix a few seconds later. That is the
+# 506 path.
 #
-# The second step runs regardless, because a display that is already off simply
-# stays off, and the power manager needs the display-off state either way.
+# The virtual sleep key (VK_SLEEP) is available but NOT used by default: on a
+# machine without S3 the power manager may resolve that request to S4, which is
+# exactly the outcome this script exists to avoid. `-IncludeSleepKey` opts in for
+# a machine that has confirmed it enters S0ix from that key; never assume it.
 
 param(
-    [string]$LogFile = "$env:LOCALAPPDATA\dsh-wake-guard.log"
+    [string]$LogFile = "$env:LOCALAPPDATA\dsh-wake-guard.log",
+    [switch]$IncludeSleepKey
 )
 
 function Write-Log([string]$message) {
@@ -88,16 +90,17 @@ public class WgPower {
 }
 '@
 
-Write-Log 'suspend request: trying VK_SLEEP'
-
-$sent = [WgPower]::TapSleepKey()
-$err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-Write-Log ("  VK_SLEEP tap returned=$sent err=$err")
-
-# Give the power manager a moment to act on the sleep key. If the machine really
-# enters standby the process is suspended here and the remainder runs on resume,
-# where turning the display off again is harmless.
-Start-Sleep -Seconds 2
+if ($IncludeSleepKey) {
+    Write-Log 'suspend request: trying VK_SLEEP (opted in)'
+    $sent = [WgPower]::TapSleepKey()
+    $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    Write-Log ("  VK_SLEEP tap returned=$sent err=$err")
+    # Give the power manager a moment to act. If the machine really enters
+    # standby, this process is suspended here and the remainder runs on resume.
+    Start-Sleep -Seconds 2
+} else {
+    Write-Log 'suspend request: display off only (VK_SLEEP skipped by default)'
+}
 
 Write-Log 'suspend request: display off (Modern Standby route)'
 [WgPower]::DisplayOff()

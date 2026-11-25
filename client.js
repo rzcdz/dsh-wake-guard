@@ -243,6 +243,38 @@ window.__ModuleLoader__.load({
             ? '通过独立助手进程结束并重新启动 DSH。'
             : '当前环境无法自动重启，请手动退出后重新打开。';
 
+      // Sleep enters Modern Standby (S0ix), the state any key press wakes. It
+      // runs in two clicks like restart, so a stray click cannot suspend the
+      // machine mid-task.
+      const [sleepArmed, setSleepArmed] = React.useState(false);
+      const [sleeping, setSleeping] = React.useState(false);
+      const [sleepNote, setSleepNote] = React.useState('');
+
+      const doSleep = async () => {
+        if (sleeping) return;
+        if (!sleepArmed) {
+          setSleepArmed(true);
+          setSleepNote('再点一次确认睡眠。按任意键即可唤醒。');
+          return;
+        }
+        setSleepArmed(false);
+        setSleeping(true);
+        setSleepNote('正在进入 S0 低电量待机…');
+        try {
+          await call('sleep', 'POST');
+        } catch (e) {
+          setSleepNote(String((e && e.message) || e));
+          setSleeping(false);
+          return;
+        }
+        // The page cannot know when the machine resumed, so it simply clears
+        // the note after a delay long enough for the suspend to have begun.
+        setTimeout(() => {
+          setSleeping(false);
+          setSleepNote('');
+        }, 8000);
+      };
+
       return h('div', { className: 'wg-page' },
         h(Styles),
         h('div', { className: 'wg-head' },
@@ -295,6 +327,22 @@ window.__ModuleLoader__.load({
         ),
 
         error ? h('div', { className: 'wg-err' }, error) : null,
+
+        h('div', { className: 'wg-restart' },
+          h('div', { className: 'wg-restarttext' },
+            h('div', { className: 'wg-label' }, '电脑睡眠'),
+            h('div', { className: 'wg-hint' }, '进入 S0 低电量待机，按任意键唤醒（不是休眠）。'),
+            sleepNote !== ''
+              ? h('div', { className: 'wg-hint', style: { color: '#b26a00' } }, sleepNote)
+              : null,
+          ),
+          h('button', {
+            className: sleepArmed ? 'wg-btn danger' : 'wg-btn',
+            disabled: sleeping,
+            onClick: doSleep,
+            onBlur: () => setSleepArmed(false),
+          }, sleeping ? '睡眠中…' : sleepArmed ? '确认' : '睡眠'),
+        ),
 
         h('div', { className: 'wg-restart' },
           h('div', { className: 'wg-restarttext' },

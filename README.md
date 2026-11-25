@@ -4,11 +4,30 @@ A [DeepSeek Harness](https://github.com/deepseek-ai) (DSH) plugin bundle for
 Windows laptops on Modern Standby: after the machine wakes from sleep, it keeps
 the system awake for a grace period so a remote client has time to reconnect.
 
-The bundle adds a sidebar entry with a switch, a status panel, a **Restart DSH**
-button, and three small PowerShell helpers. Nothing runs until you turn the
-switch on.
+The bundle adds a sidebar entry with a switch, a status panel, **Sleep** and
+**Restart** buttons, and three small PowerShell helpers. Nothing runs until you
+turn the switch on.
 
-## Restart DSH
+## Sleep
+
+The panel has a two-click **Sleep** button. It puts the machine into **Modern
+Standby (S0ix)** — the state any key press wakes — and explicitly *not* S4
+hibernation, which only the power button can leave.
+
+It works by turning the display off (`SC_MONITORPOWER`): the power manager reads
+that as loss of user presence and drops into S0ix a few seconds later.
+
+`SetSuspendState` is deliberately avoided. This machine has no S1/S2/S3
+(`powercfg /a`), so that call can resolve to S4. The Event Log tells the two
+apart — event 506 with `Reason: SC_MONITORPOWER` is S0ix, while event 42 with
+`Reason: Application API` is hibernation. Measured here: 506 on sleep, then 507
+`Reason: Input Keyboard` on wake, and no event 42 at all.
+
+The virtual sleep key (`VK_SLEEP`) is off by default for the same reason: on a
+machine without S3 the power manager may resolve it to S4. `-IncludeSleepKey`
+opts in, but confirm that key really enters S0ix on your hardware first.
+
+## Restart
 
 The panel has a two-click restart button: the first click arms it, the second
 restarts. A restart **ends every running session**, so save first; the page

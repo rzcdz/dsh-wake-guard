@@ -70,17 +70,25 @@ export function apply(ctx, config = {}) {
 
   // Put the machine into Modern Standby (S0ix), not hibernation.
   //
-  // rundll32 powrprof.dll,SetSuspendState 0,1,0 looks like "sleep", but with
-  // hibernation enabled the power manager takes the S4 path: it writes the
-  // session to hiberfil.sys, cuts power, and the next power button press shows
-  // the firmware logo before restoring. The helper script calls the API with
-  // hibernate=$false, which asks for the low-power idle path instead.
+  // `SetSuspendState(hibernate: false)` is not a safe way to ask for S0ix on a
+  // Modern Standby machine: with hibernation enabled the power manager can take
+  // the S4 path instead — the session lands in hiberfil.sys, power is cut, and
+  // the next press of the power button shows the firmware logo. S4 is only
+  // wakeable by that power button, which defeats the point of standby.
+  //
+  // The helper script therefore avoids SetSuspendState entirely: it taps the
+  // virtual sleep key (VK_SLEEP) and then turns the display off, which is the
+  // documented route from an interactive session into S0ix.
   const suspendScript = path.join(packageDir, 'scripts', 'Suspend-Standby.ps1')
 
+  /**
+   * Ask the machine to enter Modern Standby.
+   * @returns whether the helper was started.
+   */
   const suspendOnce = () => {
     if (!fs.existsSync(suspendScript)) {
       warn(`suspend script missing: ${suspendScript}`)
-      return
+      return false
     }
     try {
       const ps = spawn(
@@ -98,8 +106,10 @@ export function apply(ctx, config = {}) {
       )
       ps.on('error', (err) => warn(`suspend helper failed: ${err.message}`))
       log('suspend requested (Modern Standby path)')
+      return true
     } catch (err) {
       warn(`suspend threw: ${err?.message ?? err}`)
+      return false
     }
   }
 
@@ -326,6 +336,39 @@ export function apply(ctx, config = {}) {
 
   ctx.effect(() => {
     const disposers = []
+
+    disposers.push(
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/dsh-wake-guard/api/sleep',
+        handler: (req, res) => {
+          if (req.method !== 'POST') {
+            sendJson(res, 405, { ok: false, error: 'use POST' })
+            return
+          }
+          if (!isWin) {
+            sendJson(res, 501, { ok: false, error: '仅支持 Windows' })
+            return
+          }
+          // The reply must reach the browser before the machine suspends, so
+          // the answer is written first and the helper starts on the next tick.
+          clearSuspend()
+          suspendState = 'done'
+          if (!fs.existsSync(suspendScript)) {
+            sendJson(res, 501, { ok: false, error: '睡眠脚本不存在' })
+            return
+          }
+          sendJson(res, 200, { ok: true, method: 's0ix', note: '正在进入 S0 低电量待机' })
+          setTimeout(() => {
+            try {
+              suspendOnce()
+            } catch (error) {
+              warn(`sleep request failed: ${error?.message ?? error}`)
+            }
+          }, 350)
+        },
+      }),
+    )
 
     disposers.push(
       ctx.webServer.register({

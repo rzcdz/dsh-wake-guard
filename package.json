@@ -1,7 +1,7 @@
 {
   "name": "@rzcdz/dsh-wake-guard",
-  "version": "2.3.0",
-  "description": "唤醒后在一段时间内保持电脑不重新进入待机，方便远程客户端重新连上；面板另带一个重启按钮。",
+  "version": "2.4.0",
+  "description": "唤醒后在一段时间内保持电脑不重新进入待机，方便远程客户端重新连上；面板另带「电脑睡眠」（S0ix，按键可唤醒）和「重启」两个按钮。",
   "license": "MIT",
   "author": "rzcdz",
   "type": "module",
