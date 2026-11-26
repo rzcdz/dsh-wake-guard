@@ -66,22 +66,48 @@ config:
 
 它让电脑进入 **S0 低电量待机（S0ix）**——也就是按任意键就能唤醒的那个状态，**不是休眠 S4**（S4 必须按开机键）。
 
-实现方式：关闭显示器（`SC_MONITORPOWER`）。电源管理器把「显示器关闭」视为用户离开，几秒后转入 S0ix。
+### 为什么需要临时改设置
 
-**为什么不用别的办法**：这台机器没有 S1/S2/S3（`powercfg /a` 可查），所以任何走 `SetSuspendState` 的调用都可能落到 S4。事件日志可以区分两者：
+只关显示器是不够的。Windows 只有在「显示器关闭」持续到**睡眠空闲超时**之后才会进入 S0ix，而很多机器（包括这台）的交流供电睡眠超时是 `0`（从不）。这种情况下关屏只会得到一块黑着的屏幕，系统仍然全速运行——这正是前一版看起来"没生效"的原因。
+
+所以脚本按这个顺序做：
+
+1. 读当前交流睡眠超时（用 `powercfg /q` 的十六进制值，不依赖界面语言）
+2. 临时改为 60 秒（`powercfg /change` 的参数单位是**分钟**，脚本内部做换算）
+3. 关闭显示器
+4. 等待事件 506（进入 Modern Standby）出现
+5. 把原值写回——`0`（从不）会原样恢复为 `0`
+
+`powercfg /change` 对当前用户自己的电源方案不需要管理员权限，这是能这样做的原因。
+
+### 实测记录
+
+```
+12:52:57  AC standby timeout before = 0s
+12:52:58  AC standby timeout set to 1 min (60s)
+12:52:58  506  entering Modern Standby | Reason: SC_MONITORPOWER
+12:54:02  507  exiting Modern Standby  | Reason: Input Keyboard
+12:54:04  AC standby timeout restored to 0s (set 0 min, now 0s)
+```
+
+睡下后按键盘就能唤醒，全程没有事件 42（S4）。
+
+### 为什么不用其他方法
+
+`SetSuspendState` 会显式请求睡眠，但这台机器**没有 S1/S2/S3**，该调用可能落到 S4 休眠，之后必须按开机键。事件日志可以区分：
 
 | 事件 | 含义 |
 |---|---|
 | 506 `Reason: SC_MONITORPOWER` | 进入 S0ix，按键可唤醒 |
 | 42 `Reason: Application API` | 进入 S4 休眠，必须按开机键 |
 
-实测本插件产生的是前者：18:09:33 进入（506），18:20:24 因 `Input Keyboard` 退出（507），全程没有事件 42。
-
-脚本默认**不发送**虚拟睡眠键（`VK_SLEEP`）：在没有 S3 的机器上，这个请求可能被解析成 S4。真要用可加 `-IncludeSleepKey`，但必须先自行确认该键在本机确实进入 S0ix。
+本脚本不调用 `SetSuspendState`，也不发送虚拟睡眠键（除非显式加 `-IncludeSleepKey`）。
 
 ## 日志
 
 `%LOCALAPPDATA%\dsh-wake-guard.log`，面板底部也会显示最近 14 行。
+
+日志里会记录每次的「原值 → 临时值 → 是否进入待机 → 恢复结果」，睡眠没成功时可以直接看出卡在哪一步。
 
 ## 限制
 
